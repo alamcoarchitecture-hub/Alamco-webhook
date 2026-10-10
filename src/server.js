@@ -45,6 +45,19 @@ app.post('/alamco-webhook', (req, res) => {
   handlePlatformEvent(req.body).catch((e) => console.error('handler error', e.message));
 });
 
+// Internal: lets the bots push a plain WhatsApp message to the owner (e.g. "plan ready").
+app.post('/notify-owner', (req, res) => {
+  const secret = process.env.NOTIFY_SECRET;
+  const bearer = (req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!secret || !safeEqual(bearer || req.get('x-notify-secret') || '', secret)) return res.status(401).json({ ok: false });
+  const text = String((req.body && req.body.text) || '').slice(0, 1500);
+  const o = owner();
+  if (!text || !o) return res.status(400).json({ ok: false, error: 'missing text or owner' });
+  sendText(o, text)
+    .then((r) => res.json({ ok: true, dryRun: !!(r && r.dryRun) }))
+    .catch((e) => res.status(502).json({ ok: false, error: e.message.slice(0, 300) }));
+});
+
 function buildOwnerMessage(ev) {
   const lines = [];
   if (ev.type === 'instruction') {
