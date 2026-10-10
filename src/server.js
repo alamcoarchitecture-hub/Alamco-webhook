@@ -36,7 +36,8 @@ app.get('/', (_req, res) => res.json({ ok: true, service: 'alamco-webhook', dryR
 app.post('/alamco-webhook', (req, res) => {
   const secret = process.env.WEBHOOK_SECRET;
   if (secret) {
-    const given = req.get('x-webhook-secret') || req.query.secret || '';
+    const bearer = (req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    const given = req.get('x-webhook-secret') || bearer || req.query.secret || '';
     if (!safeEqual(given, secret)) return res.status(401).json({ ok: false, error: 'bad secret' });
   }
   logLine('payloads.jsonl', { headers: { 'content-type': req.get('content-type') }, body: req.body });
