@@ -7,13 +7,15 @@ const { parseEvent, normalizePhone } = require('./detect');
 const { sendText, sendTemplate, isDryRun } = require('./whatsapp');
 const { sendTelegram, telegramEnabled } = require('./telegram');
 
-// Owner alerts go to Telegram when configured (free, no 24h window); otherwise WhatsApp.
+// Owner alerts go to BOTH WhatsApp and Telegram (each independent; one failing doesn't stop the other).
 async function sendOwner(text, tpl) {
   const o = process.env.OWNER_WHATSAPP;
-  if (telegramEnabled()) {
-    try { return await sendTelegram(text); } catch (e) { console.error('telegram failed:', e.message); }
-  }
-  return sendText(o, text, tpl);
+  const jobs = [];
+  if (o) jobs.push(sendText(o, text, tpl).catch((e) => console.error('owner whatsapp failed:', e.message)));
+  if (telegramEnabled()) jobs.push(sendTelegram(text).catch((e) => console.error('telegram failed:', e.message)));
+  else console.warn('telegram not configured (missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID)');
+  const r = await Promise.all(jobs);
+  return r[0] || {};
 }
 
 const app = express();
@@ -40,7 +42,7 @@ function safeEqual(a, b) {
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 }
 
-app.get('/', (_req, res) => res.json({ ok: true, service: 'alamco-webhook', dryRun: isDryRun() }));
+app.get('/', (_req, res) => res.json({ ok: true, service: 'alamco-webhook', dryRun: isDryRun(), telegram: telegramEnabled() }));
 
 // ---------- Platform -> us ----------
 app.post('/alamco-webhook', (req, res) => {
