@@ -81,7 +81,24 @@ function ownerTemplate(ev) {
   return undefined;
 }
 
+async function forwardToPlanner(payload) {
+  const url = process.env.FORWARD_WEBHOOK_URL;
+  const key = process.env.FORWARD_WEBHOOK_KEY;
+  if (!url || !payload || typeof payload !== 'object') return;
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+      body: JSON.stringify(payload),
+    });
+    console.log(`[forward] planner routine -> HTTP ${r.status}`);
+  } catch (e) {
+    console.error('[forward] failed:', e.message);
+  }
+}
+
 async function handlePlatformEvent(payload) {
+  forwardToPlanner(payload);
   const ev = parseEvent(payload, { siteUrl: siteUrl(), cc: cc() });
   try { console.log('[payload] ' + JSON.stringify(payload).slice(0, 2000)); } catch (_) {}
   console.log(`[event] type=${ev.type} briefId=${ev.briefId || '-'} name=${ev.clientName || '-'}`);
