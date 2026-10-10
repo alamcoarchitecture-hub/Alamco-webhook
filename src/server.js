@@ -5,6 +5,16 @@ const express = require('express');
 const cfg = require('./config');
 const { parseEvent, normalizePhone } = require('./detect');
 const { sendText, sendTemplate, isDryRun } = require('./whatsapp');
+const { sendTelegram, telegramEnabled } = require('./telegram');
+
+// Owner alerts go to Telegram when configured (free, no 24h window); otherwise WhatsApp.
+async function sendOwner(text, tpl) {
+  const o = process.env.OWNER_WHATSAPP;
+  if (telegramEnabled()) {
+    try { return await sendTelegram(text); } catch (e) { console.error('telegram failed:', e.message); }
+  }
+  return sendText(o, text, tpl);
+}
 
 const app = express();
 const LOG_DIR = process.env.LOG_DIR || path.join(__dirname, '..', 'logs');
@@ -55,7 +65,7 @@ app.post('/notify-owner', (req, res) => {
   if (!text || !o) return res.status(400).json({ ok: false, error: 'missing text or owner' });
   const b = req.body || {};
   const tpl = { name: process.env.WHATSAPP_TEMPLATE_UPDATE || 'brief_owner_update', params: [b.client || 'Client', b.briefId || '-', b.update || text.slice(0, 200), b.url || (b.briefId ? `${siteUrl()}/track/${b.briefId}` : siteUrl())] };
-  sendText(o, text, tpl)
+  sendOwner(text, tpl)
     .then((r) => res.json({ ok: true, dryRun: !!(r && r.dryRun) }))
     .catch((e) => res.status(502).json({ ok: false, error: e.message.slice(0, 300) }));
 });
@@ -203,7 +213,7 @@ async function handlePlatformEvent(payload) {
   if (dupAlert || repeatNew) {
     console.log('[alert] duplicate or repeated new-brief, skipped');
   } else if (o) {
-    await sendText(o, buildOwnerMessage(ev), ownerTemplate(ev)).catch((e) => console.error('owner alert failed:', e.message));
+    await sendOwner(buildOwnerMessage(ev), ownerTemplate(ev)).catch((e) => console.error('owner alert failed:', e.message));
   } else {
     console.warn('OWNER_WHATSAPP not set; no owner alert sent');
   }
@@ -264,7 +274,7 @@ async function handleInbound(body) {
     } else if (cfg.rules.replyThankYouToClients) {
       logLine('actions.jsonl', { action: 'client_message', from, text });
       await sendText(from, cfg.messages.clientInboundReply).catch((e) => console.error(e.message));
-      if (o) await sendText(o, `💬 Client message from +${from}:\n${text || '(non-text message)'}`).catch((e) => console.error(e.message));
+      if (o) await sendOwner(`💬 Client message from +${from}:\n${text || '(non-text message)'}`).catch((e) => console.error(e.message));
     }
   }
 }
