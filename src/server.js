@@ -83,6 +83,7 @@ function ownerTemplate(ev) {
 
 // Payment gate: the planner gets a brief only after staff confirm the planning charge in the Studio.
 function paymentConfirmed(payload) {
+  if (payload && payload.payment && payload.payment.paid_at) return true;
   let found = false;
   const walk = (o, depth, parent) => {
     if (found || !o || typeof o !== 'object' || depth > 6) return;
@@ -141,7 +142,14 @@ async function notifyClient(ev, payload) {
   if (process.env.CLIENT_NOTIFY !== '1') return;
   const isTest = (payload && payload.test) || /test/i.test(ev.briefId || '');
   if (isTest || !ev.phone || ev.phone === owner()) return;
-  const name = ev.type === 'new_brief' ? 'brief_received' : (paymentConfirmed(payload) && !/^(work_?started|survey_?verified|draft_?ready)$/i.test(String(ev.status || '')) ? 'brief_payment_received' : clientTemplateFor(ev));
+  const paidAt = payload && payload.payment && payload.payment.paid_at;
+  let name;
+  if (ev.type === 'new_brief') name = 'brief_received';
+  else if (paidAt && !notified.has(`${ev.briefId}:brief_payment_received`)) {
+    // First time we see this brief as paid: send the payment message (it already says work has started).
+    name = 'brief_payment_received';
+    notified.add(`${ev.briefId}:brief_work_started`);
+  } else name = clientTemplateFor(ev);
   if (!name) return;
   const key = `${ev.briefId}:${name}`;
   if (notified.has(key)) return;
