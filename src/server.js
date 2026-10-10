@@ -53,7 +53,9 @@ app.post('/notify-owner', (req, res) => {
   const text = String((req.body && req.body.text) || '').slice(0, 1500);
   const o = owner();
   if (!text || !o) return res.status(400).json({ ok: false, error: 'missing text or owner' });
-  sendText(o, text)
+  const b = req.body || {};
+  const tpl = { name: process.env.WHATSAPP_TEMPLATE_UPDATE || 'brief_owner_update', params: [b.client || 'Client', b.briefId || '-', b.update || text.slice(0, 200), b.url || (b.briefId ? `${siteUrl()}/track/${b.briefId}` : siteUrl())] };
+  sendText(o, text, tpl)
     .then((r) => res.json({ ok: true, dryRun: !!(r && r.dryRun) }))
     .catch((e) => res.status(502).json({ ok: false, error: e.message.slice(0, 300) }));
 });
@@ -85,13 +87,12 @@ function buildOwnerMessage(ev) {
 
 function ownerTemplate(ev) {
   const e = process.env;
-  if (ev.type === 'new_brief' && e.WHATSAPP_TEMPLATE_NEW_BRIEF) {
-    return { name: e.WHATSAPP_TEMPLATE_NEW_BRIEF, params: [ev.clientName, ev.phone && '+' + ev.phone, ev.briefId, ev.trackUrl] };
+  const track = ev.trackUrl || (ev.briefId ? `${siteUrl()}/track/${ev.briefId}` : siteUrl());
+  if (ev.type === 'new_brief') {
+    return { name: e.WHATSAPP_TEMPLATE_NEW_BRIEF || 'brief_owner_new_entry', params: [ev.clientName, ev.phone && '+' + ev.phone, ev.briefId, track] };
   }
-  if (ev.type === 'instruction' && e.WHATSAPP_TEMPLATE_INSTRUCTION) {
-    return { name: e.WHATSAPP_TEMPLATE_INSTRUCTION, params: [ev.clientName, ev.phone && '+' + ev.phone, ev.briefId, ev.instruction, ev.trackUrl] };
-  }
-  return undefined;
+  const what = ev.type === 'instruction' ? `Client instruction: ${ev.instruction || ''}` : `Status: ${String(ev.status || 'updated').replace(/_/g, ' ')}`;
+  return { name: e.WHATSAPP_TEMPLATE_UPDATE || 'brief_owner_update', params: [ev.clientName, ev.briefId, what, track] };
 }
 
 // Payment gate: the planner gets a brief only after staff confirm the planning charge in the Studio.
