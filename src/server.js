@@ -112,7 +112,7 @@ async function notifyClient(ev, payload) {
   if (process.env.CLIENT_NOTIFY !== '1') return;
   const isTest = (payload && payload.test) || /test/i.test(ev.briefId || '');
   if (isTest || !ev.phone || ev.phone === owner()) return;
-  const name = clientTemplateFor(ev);
+  const name = ev.type === 'new_brief' ? 'brief_received' : clientTemplateFor(ev);
   if (!name) return;
   const key = `${ev.briefId}:${name}`;
   if (notified.has(key)) return;
