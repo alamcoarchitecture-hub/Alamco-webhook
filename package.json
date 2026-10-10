@@ -1,0 +1,13 @@
+{
+  "name": "alamco-webhook",
+  "version": "1.0.0",
+  "description": "Webhook + WhatsApp alert/auto-reply bot for alamcostudio.com",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "DRY_RUN=1 node src/server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": { "express": "^4.19.2" },
+  "license": "UNLICENSED"
+}

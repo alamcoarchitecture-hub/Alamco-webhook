@@ -1,0 +1,56 @@
+// Minimal WhatsApp Cloud API client (uses Node's built-in fetch, Node >= 18).
+const env = () => process.env;
+
+function isDryRun() {
+  const e = env();
+  return e.DRY_RUN === '1' || e.DRY_RUN === 'true' || !e.WHATSAPP_TOKEN || !e.WHATSAPP_PHONE_NUMBER_ID;
+}
+
+async function graphPost(body) {
+  const e = env();
+  const url = `https://graph.facebook.com/${e.GRAPH_API_VERSION || 'v21.0'}/${e.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${e.WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messaging_product: 'whatsapp', ...body }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(`WhatsApp API ${res.status}: ${JSON.stringify(data.error || data)}`);
+    err.code = data.error && data.error.code;
+    throw err;
+  }
+  return data;
+}
+
+// template = { name, params: [..] } (optional fallback)
+async function sendText(to, text, template) {
+  if (!to) return { skipped: 'no recipient' };
+  if (isDryRun()) {
+    console.log(`\n[DRY_RUN] WhatsApp -> ${to}${template && template.name ? ` (template fallback: ${template.name})` : ''}\n${text}\n`);
+    return { dryRun: true };
+  }
+  try {
+    const r = await graphPost({ to, type: 'text', text: { body: text, preview_url: true } });
+    console.log(`[sent] text -> ${to}`);
+    return r;
+  } catch (err) {
+    console.error(`[text failed] ${err.message}`);
+    if (template && template.name) {
+      const r = await graphPost({
+        to,
+        type: 'template',
+        template: {
+          name: template.name,
+          language: { code: env().WHATSAPP_TEMPLATE_LANG || 'en' },
+          components: [{ type: 'body', parameters: template.params.map((t) => ({ type: 'text', text: String(t || '-').replace(/\s+/g, ' ').slice(0, 1000) })) }],
+        },
+      });
+      console.log(`[sent] template ${template.name} -> ${to}`);
+      return r;
+    }
+    throw err;
+  }
+}
+
+module.exports = { sendText, isDryRun };
