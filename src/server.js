@@ -141,7 +141,7 @@ async function notifyClient(ev, payload) {
   if (process.env.CLIENT_NOTIFY !== '1') return;
   const isTest = (payload && payload.test) || /test/i.test(ev.briefId || '');
   if (isTest || !ev.phone || ev.phone === owner()) return;
-  const name = ev.type === 'new_brief' ? 'brief_received' : clientTemplateFor(ev);
+  const name = ev.type === 'new_brief' ? 'brief_received' : (paymentConfirmed(payload) && !/^(work_?started|survey_?verified|draft_?ready)$/i.test(String(ev.status || '')) ? 'brief_payment_received' : clientTemplateFor(ev));
   if (!name) return;
   const key = `${ev.briefId}:${name}`;
   if (notified.has(key)) return;
