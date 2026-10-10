@@ -4,8 +4,8 @@ const crypto = require('crypto');
 const express = require('express');
 const cfg = require('./config');
 const { parseEvent, normalizePhone } = require('./detect');
-const { sendText, sendTemplate, isDryRun } = require('./whatsapp');
-const { sendTelegram, telegramEnabled } = require('./telegram');
+const { sendText, sendTemplate, sendImage, isDryRun } = require('./whatsapp');
+const { sendTelegram, sendTelegramPhoto, telegramEnabled } = require('./telegram');
 
 // Owner alerts go to BOTH WhatsApp and Telegram (each independent; one failing doesn't stop the other).
 async function sendOwner(text, tpl) {
@@ -217,10 +217,30 @@ async function forwardToDesk(payload) {
   }
 }
 
+// Until client templates are approved (CLIENT_NOTIFY off), push the payment receipt image to the owner to forward manually.
+async function sendReceiptToOwner(ev, payload) {
+  try {
+    if (process.env.CLIENT_NOTIFY === '1') return;
+    const pay = payload && payload.payment;
+    const url = pay && typeof pay.receipt_url === 'string' && /^https:\/\//.test(pay.receipt_url) ? pay.receipt_url : '';
+    if (!url || !pay.paid_at || !ev.briefId) return;
+    if ((payload && payload.test) || /test/i.test(ev.briefId)) return;
+    const k = `${ev.briefId}|receipt-owner`;
+    if (persisted.alerts[k]) return;
+    persisted.alerts[k] = Date.now();
+    saveState();
+    const cap = `Payment receipt: ${ev.briefId} ${ev.clientName || ''}${ev.phone ? ' (' + ev.phone + ')' : ''}. Forward to the client.`;
+    const o = process.env.OWNER_WHATSAPP;
+    if (o) await sendImage(o, url, cap).catch((e) => console.error('owner receipt whatsapp failed:', e.message));
+    if (telegramEnabled()) await sendTelegramPhoto(url, cap).catch((e) => console.error('owner receipt telegram failed:', e.message));
+  } catch (e) { console.error('receipt to owner failed:', e.message); }
+}
+
 async function handlePlatformEvent(payload) {
   forwardToDesk(payload);
   forwardToPlanner(payload);
   const ev = parseEvent(payload, { siteUrl: siteUrl(), cc: cc() });
+  sendReceiptToOwner(ev, payload);
   try { console.log('[payload] ' + JSON.stringify(payload).slice(0, 2000)); } catch (_) {}
   console.log(`[event] type=${ev.type} briefId=${ev.briefId || '-'} name=${ev.clientName || '-'}`);
   logLine('events.jsonl', { parsed: ev });

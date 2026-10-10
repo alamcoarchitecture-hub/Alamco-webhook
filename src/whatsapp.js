@@ -75,4 +75,12 @@ async function sendTemplate(to, name, params, headerImageUrl) {
   return r;
 }
 
-module.exports = { sendText, sendTemplate, isDryRun };
+async function sendImage(to, link, caption) {
+  if (!to || !link) return { skipped: 'missing recipient or image' };
+  if (isDryRun()) { console.log(`[DRY_RUN] image -> ${to} ${link}`); return { dryRun: true }; }
+  const r = await graphPost({ to, type: 'image', image: { link, caption: String(caption || '').slice(0, 900) } });
+  console.log(`[sent] image -> ${to}`);
+  return r;
+}
+
+module.exports = { sendText, sendTemplate, sendImage, isDryRun };

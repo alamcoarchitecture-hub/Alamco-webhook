@@ -16,4 +16,17 @@ async function sendTelegram(text) {
   return data;
 }
 
-module.exports = { sendTelegram, telegramEnabled: enabled };
+async function sendTelegramPhoto(url, caption) {
+  if (!enabled()) return { skipped: 'telegram not configured' };
+  const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHAT_ID, photo: url, caption: String(caption || '').slice(0, 1000) }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) throw new Error(`Telegram photo ${res.status}: ${JSON.stringify(data).slice(0, 200)}`);
+  console.log('[sent] telegram photo -> owner');
+  return data;
+}
+
+module.exports = { sendTelegramPhoto, sendTelegram, telegramEnabled: enabled };
