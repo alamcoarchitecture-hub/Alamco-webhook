@@ -53,7 +53,7 @@ async function sendText(to, text, template) {
   }
 }
 
-async function sendTemplate(to, name, params) {
+async function sendTemplate(to, name, params, headerImageUrl) {
   if (!to || !name) return { skipped: 'missing recipient or template' };
   if (isDryRun()) {
     console.log(`[DRY_RUN] template ${name} -> ${to} params=${JSON.stringify(params)}`);
@@ -65,7 +65,10 @@ async function sendTemplate(to, name, params) {
     template: {
       name,
       language: { code: env().WHATSAPP_TEMPLATE_LANG || 'en' },
-      components: [{ type: 'body', parameters: params.map((t) => ({ type: 'text', text: String(t || '-').replace(/\s+/g, ' ').slice(0, 1000) })) }],
+      components: [
+        ...(headerImageUrl ? [{ type: 'header', parameters: [{ type: 'image', image: { link: headerImageUrl } }] }] : []),
+        { type: 'body', parameters: params.map((t) => ({ type: 'text', text: String(t || '-').replace(/\s+/g, ' ').slice(0, 1000) })) },
+      ],
     },
   });
   console.log(`[sent] template ${name} -> ${to}`);

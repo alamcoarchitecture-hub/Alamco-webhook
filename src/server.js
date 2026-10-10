@@ -176,11 +176,14 @@ async function notifyClient(ev, payload) {
   const isTest = (payload && payload.test) || /test/i.test(ev.briefId || '');
   if (isTest || !ev.phone || ev.phone === owner()) return;
   const paidAt = payload && payload.payment && payload.payment.paid_at;
+  const ru = payload && payload.payment && payload.payment.receipt_url;
+  const receiptUrl = typeof ru === 'string' && /^https:\/\//.test(ru) ? ru : '';
   let name;
   if (ev.type === 'new_brief') name = 'brief_received';
-  else if (paidAt && !notified.has(`${ev.briefId}:brief_payment_received`)) {
+  else if (paidAt && !notified.has(`${ev.briefId}:brief_payment_received`) && !notified.has(`${ev.briefId}:brief_payment_receipt`)) {
     // First time we see this brief as paid: send the payment message (it already says work has started).
     name = 'brief_payment_received';
+    if (receiptUrl) { name = 'brief_payment_receipt'; notified.add(`${ev.briefId}:brief_payment_received`); }
     notified.add(`${ev.briefId}:brief_work_started`);
   } else name = clientTemplateFor(ev);
   if (!name) return;
@@ -189,7 +192,7 @@ async function notifyClient(ev, payload) {
   notified.add(key);
   saveState();
   try {
-    await sendTemplate(ev.phone, name, [ev.clientName || 'Client', ev.trackUrl || (siteUrl() + '/track/' + ev.briefId)]);
+    await sendTemplate(ev.phone, name, [ev.clientName || 'Client', ev.trackUrl || (siteUrl() + '/track/' + ev.briefId)], name === 'brief_payment_receipt' ? receiptUrl : undefined);
     console.log(`[client] notified ${ev.phone} with ${name} for ${ev.briefId}`);
   } catch (e) {
     notified.delete(key);
