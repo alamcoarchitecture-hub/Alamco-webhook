@@ -224,6 +224,9 @@ async function sendReceiptToOwner(ev, payload) {
     const pay = payload && payload.payment;
     const url = pay && typeof pay.receipt_url === 'string' && /^https:\/\//.test(pay.receipt_url) ? pay.receipt_url : '';
     if (!url || !pay.paid_at || !ev.briefId) return;
+    // Only right after "Confirm payment": ignore later events (survey verified, drafts, etc.) that merely carry an old paid_at.
+    const age = Date.now() - Date.parse(pay.paid_at);
+    if (!Number.isFinite(age) || age > 10 * 60 * 1000) return;
     if ((payload && payload.test) || /test/i.test(ev.briefId)) return;
     const k = `${ev.briefId}|receipt-owner`;
     if (persisted.alerts[k]) return;
