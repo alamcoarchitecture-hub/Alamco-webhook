@@ -229,7 +229,7 @@ async function sendReceiptToOwner(ev, payload) {
     if (persisted.alerts[k]) return;
     persisted.alerts[k] = Date.now();
     saveState();
-    const cap = `Payment receipt: ${ev.briefId} ${ev.clientName || ''}${ev.phone ? ' (' + ev.phone + ')' : ''}. Forward to the client.`;
+    const cap = `Payment receipt: ${ev.briefId} ${ev.clientName || ''}${ev.phone ? ' (' + ev.phone + ')' : ''}. Forward to the client.\nTrack current status: ${ev.trackUrl || (siteUrl() + '/track/' + ev.briefId)}`;
     const o = process.env.OWNER_WHATSAPP;
     if (o) await sendImage(o, url, cap).catch((e) => console.error('owner receipt whatsapp failed:', e.message));
     if (telegramEnabled()) await sendTelegramPhoto(url, cap).catch((e) => console.error('owner receipt telegram failed:', e.message));
