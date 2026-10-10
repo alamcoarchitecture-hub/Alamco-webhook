@@ -81,10 +81,39 @@ function ownerTemplate(ev) {
   return undefined;
 }
 
+// Payment gate: the planner gets a brief only after staff confirm the planning charge in the Studio.
+function paymentConfirmed(payload) {
+  let found = false;
+  const walk = (o, depth, parent) => {
+    if (found || !o || typeof o !== 'object' || depth > 6) return;
+    for (const [k, v] of Object.entries(o)) {
+      const key = String(k).toLowerCase();
+      const val = typeof v === 'object' ? '' : String(v).toLowerCase();
+      if (/payment|paid|fee|charge/.test(key + ' ' + (parent || '')) && /^(true|paid|received|confirmed|complete|completed|done|yes)$/.test(val)) found = true;
+      if (/status|stage|milestone|event|type|state/.test(key) && /(payment|charge|fee).*(received|confirmed|paid|complete)|(received|confirmed|paid).*(payment|charge|fee)|^(work_?started|survey_?verified|draft_?ready)$/.test(val)) found = true;
+      if (v && typeof v === 'object') walk(v, depth + 1, key);
+    }
+  };
+  walk(payload, 0, '');
+  return found;
+}
+
+const forwarded = new Set();
 async function forwardToPlanner(payload) {
   const url = process.env.FORWARD_WEBHOOK_URL;
   const key = process.env.FORWARD_WEBHOOK_KEY;
   if (!url || !payload || typeof payload !== 'object') return;
+  if (process.env.FORWARD_REQUIRE_PAYMENT !== '0') {
+    if (!paymentConfirmed(payload)) {
+      console.log('[forward] held: planning charge not confirmed yet');
+      return;
+    }
+    const id = String(payload.job_id || payload.jobId || payload.briefId || payload.id || '');
+    if (id) {
+      if (forwarded.has(id)) { console.log(`[forward] ${id} already forwarded`); return; }
+      forwarded.add(id);
+    }
+  }
   try {
     const r = await fetch(url, {
       method: 'POST',
