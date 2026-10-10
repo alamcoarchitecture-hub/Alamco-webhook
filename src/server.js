@@ -181,9 +181,13 @@ async function handlePlatformEvent(payload) {
   const alertKey = `${ev.briefId}|${ev.type}|${ev.status}|${(payload && payload.payment && payload.payment.paid_at) || ''}|${ev.instruction || ''}`;
   const lastAt = persisted.alerts[alertKey] || 0;
   const dupAlert = ev.briefId && Date.now() - lastAt < 10 * 60 * 1000;
+  // A brief we already announced as new must not announce "new" again (e.g. after a revert).
+  const newKey = `${ev.briefId}|announced-new`;
+  const repeatNew = ev.type === 'new_brief' && ev.briefId && persisted.alerts[newKey];
+  if (ev.type === 'new_brief' && ev.briefId && !persisted.alerts[newKey]) persisted.alerts[newKey] = Date.now();
   if (!dupAlert) { persisted.alerts[alertKey] = Date.now(); saveState(); }
-  if (dupAlert) {
-    console.log('[alert] duplicate within 10 minutes, skipped');
+  if (dupAlert || repeatNew) {
+    console.log('[alert] duplicate or repeated new-brief, skipped');
   } else if (o) {
     await sendText(o, buildOwnerMessage(ev), ownerTemplate(ev)).catch((e) => console.error('owner alert failed:', e.message));
   } else {
