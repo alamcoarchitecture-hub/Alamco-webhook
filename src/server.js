@@ -51,6 +51,8 @@ function buildOwnerMessage(ev) {
     lines.push('📝 പുതിയ Special Instruction / New client instruction');
   } else if (ev.type === 'new_brief') {
     lines.push('🆕 പുതിയ Entry വന്നു / New brief on Alamco Studio');
+  } else if (ev.status) {
+    lines.push('🔄 സ്റ്റാറ്റസ് മാറ്റം / Status update on Alamco Studio');
   } else {
     lines.push('ℹ️ Alamco Studio update (unrecognised format)');
   }
@@ -61,7 +63,7 @@ function buildOwnerMessage(ev) {
     if (ev.plot) lines.push(`Plot/Location: ${ev.plot}`);
     if (ev.area) lines.push(`Area: ${ev.area}`);
   }
-  if (ev.status && ev.type !== 'instruction') lines.push(`Status: ${ev.status}`);
+  if (ev.status && ev.type !== 'instruction') lines.push(`Status: ${String(ev.status).replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase())}`);
   if (ev.type === 'instruction') lines.push(`Instruction / നിർദ്ദേശം: ${ev.instruction}`);
   if (ev.trackUrl) lines.push(`Track: ${ev.trackUrl}`);
   if (ev.type === 'instruction') lines.push('Reply "ok" to accept / സ്വീകരിക്കാൻ "ok" അയക്കുക');
@@ -81,6 +83,7 @@ function ownerTemplate(ev) {
 
 async function handlePlatformEvent(payload) {
   const ev = parseEvent(payload, { siteUrl: siteUrl(), cc: cc() });
+  try { console.log('[payload] ' + JSON.stringify(payload).slice(0, 2000)); } catch (_) {}
   console.log(`[event] type=${ev.type} briefId=${ev.briefId || '-'} name=${ev.clientName || '-'}`);
   logLine('events.jsonl', { parsed: ev });
   const o = owner();
