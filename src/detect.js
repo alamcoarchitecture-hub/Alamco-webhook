@@ -45,21 +45,30 @@ function normalizePhone(p, cc = '91') {
 function parseEvent(payload, { siteUrl = 'https://alamcostudio.com', cc = '91' } = {}) {
   const p = payload && typeof payload === 'object' ? payload : { raw: payload };
   const eventName = findValue(p, ['event', 'eventType', 'type', 'action', 'topic'], 1).toLowerCase();
-  const briefId = findValue(p, ['briefId', 'brief_id', 'trackingId', 'trackId', 'reference', 'ref', 'id', 'code']);
+  const briefId = findValue(p, ['jobId', 'job_id', 'briefId', 'brief_id', 'trackingId', 'trackId', 'reference', 'ref', 'id', 'code']);
   const instruction = findValue(p, [
     'specialInstruction', 'specialInstructions', 'special_instruction', 'instruction', 'instructions',
-    'clientInstruction', 'clientNote', 'note', 'notes', 'comment', 'message', 'text', 'remarks',
+    'clientChanges', 'clientInstruction', 'clientNote', 'note', 'notes', 'comment', 'message', 'text', 'remarks',
   ]);
   const clientName = findValue(p, ['clientName', 'client_name', 'customerName', 'customer', 'name', 'fullName', 'client']);
   const phone = normalizePhone(findValue(p, ['phone', 'mobile', 'clientPhone', 'clientMobile', 'whatsapp', 'contact', 'phoneNumber']), cc);
-  const area = findValue(p, ['area', 'builtUpArea', 'sqft', 'size']);
-  const plot = findValue(p, ['plot', 'plotSize', 'plotArea', 'location', 'site']);
+  const area = findValue(p, ['areaBandSqft', 'area', 'builtUpArea', 'sqft', 'size']);
+  const plot = findValue(p, ['extentCent', 'plot', 'plotSize', 'plotArea', 'location', 'site']);
   const status = findValue(p, ['status', 'milestone', 'stage'], 2);
 
   let type;
-  if (/instruction|note|comment|message/.test(eventName) || (instruction && !/new|creat|brief|entry|lead|enquir|inquir/.test(eventName))) {
-    type = instruction ? 'instruction' : 'unknown';
-  } else if (/new|creat|brief|entry|lead|enquir|inquir|export/.test(eventName) || briefId) {
+  const st = String(status || '').toLowerCase();
+  if (/instruction|change/.test(st) && instruction) {
+    type = 'instruction';
+  } else if (/instruction|note|comment|message/.test(eventName) && instruction) {
+    type = 'instruction';
+  } else if (/^(new|submitted|received|created)$/.test(st) || /new|creat|entry|lead|enquir|inquir/.test(eventName)) {
+    type = 'new_brief';
+  } else if (st) {
+    type = 'status';
+  } else if (instruction && !briefId) {
+    type = 'instruction';
+  } else if (briefId) {
     type = 'new_brief';
   } else {
     type = 'unknown';

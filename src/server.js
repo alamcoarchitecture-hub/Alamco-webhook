@@ -51,7 +51,7 @@ function buildOwnerMessage(ev) {
     lines.push('📝 പുതിയ Special Instruction / New client instruction');
   } else if (ev.type === 'new_brief') {
     lines.push('🆕 പുതിയ Entry വന്നു / New brief on Alamco Studio');
-  } else if (ev.status) {
+  } else if (ev.type === 'status' || ev.status) {
     lines.push('🔄 സ്റ്റാറ്റസ് മാറ്റം / Status update on Alamco Studio');
   } else {
     lines.push('ℹ️ Alamco Studio update (unrecognised format)');
@@ -60,7 +60,7 @@ function buildOwnerMessage(ev) {
   if (ev.phone) lines.push(`Phone: +${ev.phone}`);
   if (ev.briefId) lines.push(`Brief ID: ${ev.briefId}`);
   if (ev.type === 'new_brief') {
-    if (ev.plot) lines.push(`Plot/Location: ${ev.plot}`);
+    if (ev.plot) lines.push(`Plot: ${ev.plot}`);
     if (ev.area) lines.push(`Area: ${ev.area}`);
   }
   if (ev.status && ev.type !== 'instruction') lines.push(`Status: ${String(ev.status).replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase())}`);
