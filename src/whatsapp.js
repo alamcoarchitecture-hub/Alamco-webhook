@@ -53,4 +53,23 @@ async function sendText(to, text, template) {
   }
 }
 
-module.exports = { sendText, isDryRun };
+async function sendTemplate(to, name, params) {
+  if (!to || !name) return { skipped: 'missing recipient or template' };
+  if (isDryRun()) {
+    console.log(`[DRY_RUN] template ${name} -> ${to} params=${JSON.stringify(params)}`);
+    return { dryRun: true };
+  }
+  const r = await graphPost({
+    to,
+    type: 'template',
+    template: {
+      name,
+      language: { code: env().WHATSAPP_TEMPLATE_LANG || 'en' },
+      components: [{ type: 'body', parameters: params.map((t) => ({ type: 'text', text: String(t || '-').replace(/\s+/g, ' ').slice(0, 1000) })) }],
+    },
+  });
+  console.log(`[sent] template ${name} -> ${to}`);
+  return r;
+}
+
+module.exports = { sendText, sendTemplate, isDryRun };

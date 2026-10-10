@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const express = require('express');
 const cfg = require('./config');
 const { parseEvent, normalizePhone } = require('./detect');
-const { sendText, isDryRun } = require('./whatsapp');
+const { sendText, sendTemplate, isDryRun } = require('./whatsapp');
 
 const app = express();
 const LOG_DIR = process.env.LOG_DIR || path.join(__dirname, '..', 'logs');
@@ -97,6 +97,35 @@ async function forwardToPlanner(payload) {
   }
 }
 
+// Which app status sends which client template (only when CLIENT_NOTIFY=1 and templates are approved).
+function clientTemplateFor(ev) {
+  const st = String(ev.status || '').toLowerCase();
+  if (/^work_?started$/.test(st)) return 'brief_work_started';
+  if (/senior|plan_?ready|draft_?ready|ready_?for_?client|architect/.test(st)) return 'brief_plan_ready';
+  if (/^sent_?to_?client$/.test(st)) return 'brief_sent_to_client';
+  if (/^approved$/.test(st)) return 'brief_approved';
+  return '';
+}
+
+const notified = new Set();
+async function notifyClient(ev, payload) {
+  if (process.env.CLIENT_NOTIFY !== '1') return;
+  const isTest = (payload && payload.test) || /test/i.test(ev.briefId || '');
+  if (isTest || !ev.phone || ev.phone === owner()) return;
+  const name = clientTemplateFor(ev);
+  if (!name) return;
+  const key = `${ev.briefId}:${name}`;
+  if (notified.has(key)) return;
+  notified.add(key);
+  try {
+    await sendTemplate(ev.phone, name, [ev.clientName || 'Client', ev.trackUrl || (siteUrl() + '/track/' + ev.briefId)]);
+    console.log(`[client] notified ${ev.phone} with ${name} for ${ev.briefId}`);
+  } catch (e) {
+    notified.delete(key);
+    console.error('client notify failed:', e.message);
+  }
+}
+
 async function handlePlatformEvent(payload) {
   forwardToPlanner(payload);
   const ev = parseEvent(payload, { siteUrl: siteUrl(), cc: cc() });
@@ -109,6 +138,7 @@ async function handlePlatformEvent(payload) {
   } else {
     console.warn('OWNER_WHATSAPP not set; no owner alert sent');
   }
+  notifyClient(ev, payload);
   if (ev.type === 'instruction' && ev.phone && cfg.rules.ackClientOnInstruction && ev.phone !== o) {
     await sendText(ev.phone, cfg.messages.instructionAck).catch((e) => console.error('client ack failed:', e.message));
   }
