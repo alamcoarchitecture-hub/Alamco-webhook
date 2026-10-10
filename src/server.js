@@ -99,7 +99,13 @@ function paymentConfirmed(payload) {
   return found;
 }
 
-const forwarded = new Set();
+const STATE_FILE = process.env.STATE_FILE || '/tmp/alamco-state.json';
+let persisted = { forwarded: [], notified: [], alerts: {} };
+try { persisted = { ...persisted, ...JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) }; } catch (_) {}
+function saveState() {
+  try { fs.writeFileSync(STATE_FILE, JSON.stringify({ forwarded: [...forwarded], notified: [...notified], alerts: persisted.alerts })); } catch (_) {}
+}
+const forwarded = new Set(persisted.forwarded);
 async function forwardToPlanner(payload) {
   const url = process.env.FORWARD_WEBHOOK_URL;
   const key = process.env.FORWARD_WEBHOOK_KEY;
@@ -113,6 +119,7 @@ async function forwardToPlanner(payload) {
     if (id) {
       if (forwarded.has(id)) { console.log(`[forward] ${id} already forwarded`); return; }
       forwarded.add(id);
+      saveState();
     }
   }
   try {
@@ -137,7 +144,7 @@ function clientTemplateFor(ev) {
   return '';
 }
 
-const notified = new Set();
+const notified = new Set(persisted.notified);
 async function notifyClient(ev, payload) {
   if (process.env.CLIENT_NOTIFY !== '1') return;
   const isTest = (payload && payload.test) || /test/i.test(ev.briefId || '');
@@ -154,6 +161,7 @@ async function notifyClient(ev, payload) {
   const key = `${ev.briefId}:${name}`;
   if (notified.has(key)) return;
   notified.add(key);
+  saveState();
   try {
     await sendTemplate(ev.phone, name, [ev.clientName || 'Client', ev.trackUrl || (siteUrl() + '/track/' + ev.briefId)]);
     console.log(`[client] notified ${ev.phone} with ${name} for ${ev.briefId}`);
@@ -170,7 +178,13 @@ async function handlePlatformEvent(payload) {
   console.log(`[event] type=${ev.type} briefId=${ev.briefId || '-'} name=${ev.clientName || '-'}`);
   logLine('events.jsonl', { parsed: ev });
   const o = owner();
-  if (o) {
+  const alertKey = `${ev.briefId}|${ev.type}|${ev.status}|${(payload && payload.payment && payload.payment.paid_at) || ''}|${ev.instruction || ''}`;
+  const lastAt = persisted.alerts[alertKey] || 0;
+  const dupAlert = ev.briefId && Date.now() - lastAt < 10 * 60 * 1000;
+  if (!dupAlert) { persisted.alerts[alertKey] = Date.now(); saveState(); }
+  if (dupAlert) {
+    console.log('[alert] duplicate within 10 minutes, skipped');
+  } else if (o) {
     await sendText(o, buildOwnerMessage(ev), ownerTemplate(ev)).catch((e) => console.error('owner alert failed:', e.message));
   } else {
     console.warn('OWNER_WHATSAPP not set; no owner alert sent');
