@@ -75,15 +75,15 @@ app.post('/notify-owner', (req, res) => {
 function buildOwnerMessage(ev) {
   const lines = [];
   if (ev.type === 'instruction') {
-    lines.push('📝 പുതിയ Special Instruction / New client instruction');
+    lines.push('📝 New client instruction');
   } else if (ev.type === 'new_brief') {
-    lines.push('🆕 പുതിയ Entry വന്നു / New brief on Alamco Studio');
+    lines.push('🆕 New brief on Alamco Studio');
   } else if (ev.type === 'status' || ev.status) {
-    lines.push('🔄 സ്റ്റാറ്റസ് മാറ്റം / Status update on Alamco Studio');
+    lines.push('🔄 Status update on Alamco Studio');
   } else {
     lines.push('ℹ️ Alamco Studio update (unrecognised format)');
   }
-  if (ev.clientName) lines.push(`Client / ക്ലയന്റ്: ${ev.clientName}`);
+  if (ev.clientName) lines.push(`Client: ${ev.clientName}`);
   if (ev.phone) lines.push(`Phone: +${ev.phone}`);
   if (ev.briefId) lines.push(`Brief ID: ${ev.briefId}`);
   if (ev.type === 'new_brief') {
@@ -91,9 +91,9 @@ function buildOwnerMessage(ev) {
     if (ev.area) lines.push(`Area: ${ev.area}`);
   }
   if (ev.status && ev.type !== 'instruction') lines.push(`Status: ${String(ev.status).replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase())}`);
-  if (ev.type === 'instruction') lines.push(`Instruction / നിർദ്ദേശം: ${ev.instruction}`);
+  if (ev.type === 'instruction') lines.push(`Instruction: ${ev.instruction}`);
   if (ev.trackUrl) lines.push(`Track: ${ev.trackUrl}`);
-  if (ev.type === 'instruction') lines.push('Reply "ok" to accept / സ്വീകരിക്കാൻ "ok" അയക്കുക');
+  if (ev.type === 'instruction') lines.push('Reply "ok" to accept');
   return lines.join('\n');
 }
 

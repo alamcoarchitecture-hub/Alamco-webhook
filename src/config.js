@@ -5,7 +5,7 @@ module.exports = {
   messages: {
     ownerAcceptedReply: 'Accepted.',
     clientInboundReply: 'Thank you',
-    instructionAck: 'Thank you, ലഭിച്ചു. ഞങ്ങൾ പരിശോധിച്ച് അറിയിക്കാം.',
+    instructionAck: 'Thank you, we have received your instruction. We will review it and update you.',
   },
   rules: {
     // Auto-reply to the client when a special instruction arrives with a client phone
