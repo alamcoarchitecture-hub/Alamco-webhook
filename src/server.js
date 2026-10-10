@@ -197,7 +197,25 @@ async function notifyClient(ev, payload) {
   }
 }
 
+// Mirror every platform event into the Office Desk board (best effort).
+async function forwardToDesk(payload) {
+  const url = process.env.DESK_INGEST_URL;
+  const key = process.env.DESK_INGEST_SECRET;
+  if (!url || !key || !payload || typeof payload !== 'object') return;
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify(payload),
+    });
+    console.log(`[desk] ingest -> HTTP ${r.status}`);
+  } catch (e) {
+    console.error('[desk] ingest failed:', e.message);
+  }
+}
+
 async function handlePlatformEvent(payload) {
+  forwardToDesk(payload);
   forwardToPlanner(payload);
   const ev = parseEvent(payload, { siteUrl: siteUrl(), cc: cc() });
   try { console.log('[payload] ' + JSON.stringify(payload).slice(0, 2000)); } catch (_) {}
