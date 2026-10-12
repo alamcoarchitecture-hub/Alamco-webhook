@@ -287,6 +287,12 @@ app.post('/whatsapp', (req, res) => {
     if (!safeEqual(sig, expected)) return res.sendStatus(401);
   }
   logLine('inbound.jsonl', { body: req.body });
+  try {
+    for (const en of (req.body && req.body.entry) || []) for (const ch of en.changes || []) for (const st of (ch.value && ch.value.statuses) || []) {
+      const er = (st.errors && st.errors[0]) || {};
+      console.log(`[status] ${st.status} to=${st.recipient_id} id=${String(st.id || '').slice(-8)}${er.code ? ' error=' + er.code + ' ' + (er.title || er.message || '') : ''}`);
+    }
+  } catch (_) {}
   res.sendStatus(200);
   handleInbound(req.body).catch((e) => console.error('inbound error', e.message));
 });
