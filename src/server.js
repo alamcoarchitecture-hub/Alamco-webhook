@@ -177,7 +177,7 @@ async function notifyClient(ev, payload) {
   if (isTest || !ev.phone || ev.phone === owner()) return;
   const paidAt = payload && payload.payment && payload.payment.paid_at;
   const ru = payload && payload.payment && payload.payment.receipt_url;
-  const receiptUrl = typeof ru === 'string' && /^https:\/\//.test(ru) ? ru : '';
+  const receiptUrl = process.env.RECEIPT_TEMPLATE_APPROVED === '1' && typeof ru === 'string' && /^https:\/\//.test(ru) ? ru : '';
   let name;
   if (ev.type === 'new_brief') name = 'brief_received';
   else if (paidAt && !notified.has(`${ev.briefId}:brief_payment_received`) && !notified.has(`${ev.briefId}:brief_payment_receipt`)) {
@@ -220,7 +220,7 @@ async function forwardToDesk(payload) {
 // Until client templates are approved (CLIENT_NOTIFY off), push the payment receipt image to the owner to forward manually.
 async function sendReceiptToOwner(ev, payload) {
   try {
-    if (process.env.CLIENT_NOTIFY === '1') return;
+    if (process.env.CLIENT_NOTIFY === '1' && process.env.RECEIPT_TEMPLATE_APPROVED === '1') return;
     const pay = payload && payload.payment;
     const url = pay && typeof pay.receipt_url === 'string' && /^https:\/\//.test(pay.receipt_url) ? pay.receipt_url : '';
     if (!url || !pay.paid_at || !ev.briefId) return;
