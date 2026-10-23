@@ -297,6 +297,52 @@ app.post('/whatsapp', (req, res) => {
   handleInbound(req.body).catch((e) => console.error('inbound error', e.message));
 });
 
+// Forward client WhatsApp voice notes to Alamco Studio (Client special request step).
+const voiceSeen = new Set();
+async function forwardVoiceNote(m, from) {
+  const media = m.audio || m.voice || {};
+  const mediaId = media.id;
+  if (!mediaId) return;
+  if (voiceSeen.has(m.id)) return;
+  voiceSeen.add(m.id);
+  if (voiceSeen.size > 5000) voiceSeen.clear();
+  const secret = process.env.STUDIO_VOICE_SECRET;
+  if (!secret) { console.warn('[voice] STUDIO_VOICE_SECRET not set; skipping forward'); logLine('actions.jsonl', { action: 'voice_skipped_no_secret', from, wa_message_id: m.id }); return; }
+  const url = process.env.STUDIO_VOICE_URL || 'https://alamcostudio.com/api/client-voice';
+  const mime = media.mime_type || 'audio/ogg';
+  const receivedAt = m.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : new Date().toISOString();
+  let status = 'upload_failed', brief = '', detail = '';
+  try {
+    const tok = process.env.WHATSAPP_TOKEN;
+    if (!tok) throw new Error('WHATSAPP_TOKEN not set');
+    const v = process.env.GRAPH_API_VERSION || 'v21.0';
+    const meta = await fetch(`https://graph.facebook.com/${v}/${mediaId}`, { headers: { Authorization: `Bearer ${tok}` } });
+    const mj = await meta.json().catch(() => ({}));
+    if (!meta.ok || !mj.url) throw new Error(`media lookup ${meta.status}`);
+    const dl = await fetch(mj.url, { headers: { Authorization: `Bearer ${tok}` } });
+    if (!dl.ok) throw new Error(`media download ${dl.status}`);
+    const buf = Buffer.from(await dl.arrayBuffer());
+    const fd = new FormData();
+    fd.append('audio', new Blob([buf], { type: mime }), `voice-${m.id}.ogg`);
+    fd.append('phone', from);
+    fd.append('wa_message_id', m.id || '');
+    fd.append('mime_type', mime);
+    fd.append('received_at', receivedAt);
+    const r = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${secret}` }, body: fd });
+    const rj = await r.json().catch(() => ({}));
+    const st = String(rj.status || rj.result || (rj.ok ? 'ok' : '')).toLowerCase();
+    if (r.ok && (st === 'no_match' || rj.no_match)) status = 'no_match';
+    else if (r.ok && (st === 'multiple' || rj.multiple)) status = 'multiple';
+    else if (r.ok && (rj.ok || st === 'ok' || st === 'saved' || st === 'duplicate')) { status = 'ok'; brief = rj.brief_id || rj.job_id || rj.brief || ''; }
+    else detail = `studio ${r.status}`;
+  } catch (e) { detail = e.message; }
+  logLine('actions.jsonl', { action: 'client_voice', from, wa_message_id: m.id, status, brief, detail });
+  console.log(`[voice] from=${from} status=${status} brief=${brief} ${detail}`);
+  const msg = status === 'ok' ? `saved to Studio${brief ? ` (brief ${brief})` : ''}`
+    : status === 'no_match' ? 'not matched to any job' : status === 'multiple' ? 'matches multiple jobs' : 'upload failed';
+  await sendOwner(`🎤 Client voice note from +${from}: ${msg}`).catch((e) => console.error(e.message));
+}
+
 async function handleInbound(body) {
   const o = owner();
   const msgs = [];
@@ -323,7 +369,10 @@ async function handleInbound(body) {
         await sendText(from, cfg.messages.ownerAcceptedReply).catch((e) => console.error(e.message));
       }
       // other owner messages: no auto reply (avoids noise/loops)
-    } else if (cfg.rules.replyThankYouToClients) {
+    } else if (m.type === 'audio' || m.type === 'voice') {
+      await forwardVoiceNote(m, from).catch((e) => console.error('voice forward failed:', e.message));
+    }
+    if (!isOwner && cfg.rules.replyThankYouToClients) {
       logLine('actions.jsonl', { action: 'client_message', from, text });
       await sendText(from, cfg.messages.clientInboundReply).catch((e) => console.error(e.message));
       if (o) await sendOwner(`💬 Client message from +${from}:\n${text || '(non-text message)'}`).catch((e) => console.error(e.message));
